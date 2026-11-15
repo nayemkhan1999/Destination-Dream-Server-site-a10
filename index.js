@@ -1,6 +1,10 @@
 const express = require("express");
 const cors = require("cors");
 require("dotenv").config();
+
+// DNS configuration
+const dns = require("dns");
+dns.setServers(["8.8.8.8", "1.1.1.1"]);
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const app = express();
 const port = process.env.PORT || 5000;
@@ -12,6 +16,7 @@ app.use(
     origin: [
       "http://localhost:5173",
       "https://destination-dream-ebfea.web.app",
+      "https://zippy-faloodeh-6b6412.netlify.app",
     ],
     credentials: true,
   })
@@ -19,7 +24,7 @@ app.use(
 app.use(express.json());
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.l4sutcp.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
-console.log(uri);
+
 
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
 const client = new MongoClient(uri, {
@@ -33,8 +38,12 @@ const client = new MongoClient(uri, {
 async function run() {
   try {
     // Connect the client to the server	(optional starting in v4.7)
-    // await client.connect();
+    await client.connect();
+await client.db("admin").command({ ping: 1 });
 
+console.log(
+  "Pinged your deployment. You successfully connected to MongoDB!"
+);
     const destinationCollection = client
       .db("destinationDB")
       .collection("destination");
@@ -124,9 +133,7 @@ async function run() {
     });
 
     // await client.db("admin").command({ ping: 1 });
-    console.log(
-      "Pinged your deployment. You successfully connected to MongoDB!"
-    );
+   
   } finally {
     // Ensures that the client will close when you finish/error
     // await client.close();
