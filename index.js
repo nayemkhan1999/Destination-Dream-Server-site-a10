@@ -1,16 +1,15 @@
+const dns = require("dns");
+dns.setServers(["8.8.8.8", "8.8.4.4"]);
 const express = require("express");
 const cors = require("cors");
 require("dotenv").config();
 
-// DNS configuration
-const dns = require("dns");
-dns.setServers(["8.8.8.8", "1.1.1.1"]);
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
+
 const app = express();
 const port = process.env.PORT || 5000;
 
-//middleware
-// app.use(cors());
+// Middleware
 app.use(
   cors({
     origin: [
@@ -21,12 +20,12 @@ app.use(
     credentials: true,
   })
 );
+
 app.use(express.json());
 
+// MongoDB connection
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.l4sutcp.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 
-
-// Create a MongoClient with a MongoClientOptions object to set the Stable API version
 const client = new MongoClient(uri, {
   serverApi: {
     version: ServerApiVersion.v1,
@@ -35,116 +34,204 @@ const client = new MongoClient(uri, {
   },
 });
 
-async function run() {
-  try {
-    // Connect the client to the server	(optional starting in v4.7)
-    await client.connect();
-await client.db("admin").command({ ping: 1 });
+let dbPromise;
 
-console.log(
-  "Pinged your deployment. You successfully connected to MongoDB!"
-);
-    const destinationCollection = client
-      .db("destinationDB")
-      .collection("destination");
+async function getCollections() {
+  if (!dbPromise) {
+    dbPromise = client.connect()
+      .then(async () => {
+        await client.db("admin").command({ ping: 1 });
+        console.log("MongoDB connected successfully!");
 
-    // category collection
-    const categoryCollection = client
-      .db("destinationDB")
-      .collection("destination_category");
+        const db = client.db("destinationDB");
 
-    // email
-    app.get("/destination_email/:email", async (req, res) => {
-      const email = req.params.email;
-      const query = { email: email };
-      const result = await destinationCollection.find(query).toArray();
-      res.send(result);
-    });
-    // Data get
-    app.get("/destination", async (req, res) => {
-      const cursor = destinationCollection.find();
-      const result = await cursor.toArray();
-      res.send(result);
-    });
-    // Data Post
-    app.post("/destination", async (req, res) => {
-      const newDestination = req.body;
-      console.log(newDestination);
-      const result = await destinationCollection.insertOne(newDestination);
-      res.send(result);
-    });
-    // category collection
-    app.get("/destination_category", async (req, res) => {
-      const getDestinations = categoryCollection.find();
-      const result = await getDestinations.toArray();
-      res.send(result);
-    });
-    // sub category
-    app.get("/categoryCollection/:Country", async (req, res) => {
-      const category = req.params.Country;
-      const query = { Country: category };
-      const result = await destinationCollection.find(query).toArray();
-      console.log(result, "server site");
-      res.send(result);
-    });
-    //  Data Updated
-    app.put("/destination/:id", async (req, res) => {
-      const id = req.params.id;
-      const filter = { _id: new ObjectId(id) };
-      const options = { upsert: true };
-      const updatedDestination = req.body;
-      const destination = {
-        $set: {
-          name: updatedDestination.name,
-          Country: updatedDestination.Country,
-          spotLocation: updatedDestination.spotLocation,
-          averageCost: updatedDestination.averageCost,
-          seasonality: updatedDestination.seasonality,
-          tavelTime: updatedDestination.tavelTime,
-          photo: updatedDestination.photo,
-          totalVisitors: updatedDestination.totalVisitors,
-          email: updatedDestination.email,
-          displayName: updatedDestination.displayName,
-          description: updatedDestination.description,
-        },
-      };
-      const result = await destinationCollection.updateOne(
-        filter,
-        destination,
-        options
-      );
-      res.send(result);
-    });
-
-    // App get
-    app.get("/destination/:id", async (req, res) => {
-      const id = req.params.id;
-      const query = { _id: new ObjectId(id) };
-      const result = await destinationCollection.findOne(query);
-      res.send(result);
-    });
-
-    //Delete operation
-    app.delete("/destination/:id", async (req, res) => {
-      const id = req.params.id;
-      const query = { _id: new ObjectId(id) };
-      const result = await destinationCollection.deleteOne(query);
-      res.send(result);
-    });
-
-    // await client.db("admin").command({ ping: 1 });
-   
-  } finally {
-    // Ensures that the client will close when you finish/error
-    // await client.close();
+        return {
+          destinationCollection: db.collection("destination"),
+          categoryCollection: db.collection("destination_category"),
+        };
+      })
+      .catch((error) => {
+        dbPromise = null;
+        throw error;
+      });
   }
-}
-run().catch(console.dir);
 
+  return dbPromise;
+}
+
+// Async error handler
+const asyncHandler = (fn) => (req, res, next) => {
+  Promise.resolve(fn(req, res, next)).catch(next);
+};
+
+// Home route
 app.get("/", (req, res) => {
   res.send("Destination Dreams server site is running");
 });
 
-app.listen(port, () => {
-  console.log(`Destination Dreams server is running on port:${port}`);
+// Get destinations by email
+app.get(
+  "/destination_email/:email",
+  asyncHandler(async (req, res) => {
+    const { destinationCollection } = await getCollections();
+
+    const result = await destinationCollection
+      .find({ email: req.params.email })
+      .toArray();
+
+    res.send(result);
+  })
+);
+
+// Get all destinations
+app.get(
+  "/destination",
+  asyncHandler(async (req, res) => {
+    const { destinationCollection } = await getCollections();
+
+    const result = await destinationCollection.find().toArray();
+
+    res.send(result);
+  })
+);
+
+// Add destination
+app.post(
+  "/destination",
+  asyncHandler(async (req, res) => {
+    const { destinationCollection } = await getCollections();
+
+    const newDestination = req.body;
+
+    const result = await destinationCollection.insertOne(newDestination);
+
+    res.send(result);
+  })
+);
+
+// Get all categories
+app.get(
+  "/destination_category",
+  asyncHandler(async (req, res) => {
+    const { categoryCollection } = await getCollections();
+
+    const result = await categoryCollection.find().toArray();
+
+    res.send(result);
+  })
+);
+
+// Get destinations by country
+app.get(
+  "/categoryCollection/:Country",
+  asyncHandler(async (req, res) => {
+    const { destinationCollection } = await getCollections();
+
+    const result = await destinationCollection
+      .find({ Country: req.params.Country })
+      .toArray();
+
+    res.send(result);
+  })
+);
+
+// Update destination
+app.put(
+  "/destination/:id",
+  asyncHandler(async (req, res) => {
+    const { destinationCollection } = await getCollections();
+
+    const id = req.params.id;
+
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).send({ message: "Invalid destination ID" });
+    }
+
+    const updatedDestination = req.body;
+
+    const filter = { _id: new ObjectId(id) };
+
+    const destination = {
+      $set: {
+        name: updatedDestination.name,
+        Country: updatedDestination.Country,
+        spotLocation: updatedDestination.spotLocation,
+        averageCost: updatedDestination.averageCost,
+        seasonality: updatedDestination.seasonality,
+        tavelTime: updatedDestination.tavelTime,
+        photo: updatedDestination.photo,
+        totalVisitors: updatedDestination.totalVisitors,
+        email: updatedDestination.email,
+        displayName: updatedDestination.displayName,
+        description: updatedDestination.description,
+      },
+    };
+
+    const result = await destinationCollection.updateOne(
+      filter,
+      destination,
+      { upsert: true }
+    );
+
+    res.send(result);
+  })
+);
+
+// Get destination by ID
+app.get(
+  "/destination/:id",
+  asyncHandler(async (req, res) => {
+    const { destinationCollection } = await getCollections();
+
+    const id = req.params.id;
+
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).send({ message: "Invalid destination ID" });
+    }
+
+    const result = await destinationCollection.findOne({
+      _id: new ObjectId(id),
+    });
+
+    res.send(result);
+  })
+);
+
+// Delete destination
+app.delete(
+  "/destination/:id",
+  asyncHandler(async (req, res) => {
+    const { destinationCollection } = await getCollections();
+
+    const id = req.params.id;
+
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).send({ message: "Invalid destination ID" });
+    }
+
+    const result = await destinationCollection.deleteOne({
+      _id: new ObjectId(id),
+    });
+
+    res.send(result);
+  })
+);
+
+// Error handler
+app.use((err, req, res, next) => {
+  console.error("Server error:", err);
+
+  res.status(500).send({
+    message: "Internal Server Error",
+  });
 });
+
+// Local development
+if (!process.env.VERCEL) {
+  app.listen(port, () => {
+    console.log(`Destination Dreams server running on port: ${port}`);
+  });
+}
+
+// Vercel serverless export
+module.exports = app;
