@@ -13,10 +13,11 @@ const port = process.env.PORT || 5000;
 app.use(
   cors({
     origin: [
-      "http://localhost:5173",
-      "https://destination-dream-ebfea.web.app",
-      "https://zippy-faloodeh-6b6412.netlify.app",
-    ],
+  "http://localhost:5173",
+  "https://destination-dream-ebfea.web.app",
+  "https://zippy-faloodeh-6b6412.netlify.app",
+  "https://destination-dream-client-sidte-a10.vercel.app",
+],
     credentials: true,
   })
 );
